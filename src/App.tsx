@@ -21,6 +21,13 @@ import {
   MERCHANT_NAME,
   MERCHANT_SUPPORT,
   buildAuthorizationText,
+  buildStructuredTerms,
+  cancelLabel,
+  catalogCtaLabel,
+  catalogPriceLabel,
+  confirmCtaLabel,
+  orderTypeLabel,
+  receiptTitle,
   type CatalogItem,
 } from "./catalog";
 import { buildTermsAndConditions } from "./esignConsent";
@@ -116,6 +123,14 @@ export function App() {
           ? `Order #${item.id.toUpperCase().replace(/-/g, "")}`
           : item.title,
       frequency: item.frequency,
+      topUpTriggerCents: item.topUpTriggerCents,
+      topUpMaxCents: item.topUpMaxCents,
+      bidPriceCents: item.bidPriceCents,
+      minQuantity: item.minQuantity,
+      maxQuantity: item.maxQuantity,
+      maximumTotalCents: item.maximumTotalCents,
+      minFairValueCents: item.minFairValueCents,
+      maxFairValueCents: item.maxFairValueCents,
     });
   }, [item]);
 
@@ -276,13 +291,7 @@ export function App() {
       });
 
       const consentTimestamp = new Date().toISOString();
-      const structuredTerms =
-        item.orderType === "recurring_subscription"
-          ? {
-              frequency: item.frequency ?? ("monthly" as const),
-              subscriptionAmount: { cents: item.amountCents },
-            }
-          : {};
+      const structuredTerms = buildStructuredTerms(item);
 
       const authBody = {
         renderedAuthorizationText: disclosure,
@@ -474,33 +483,27 @@ export function App() {
           <section>
             <div className="hero">
               <h1>What are you shopping for?</h1>
-              <p>Buy once or subscribe — pay securely from your bank account.</p>
+              <p>
+                One-time buys, subscriptions, auto top-ups, and credit orders —
+                paid securely from your bank.
+              </p>
             </div>
             <div className="catalog">
               {CATALOG.map((product) => (
                 <article key={product.id} className="product">
                   <div>
-                    <p className="tag">
-                      {product.orderType === "one_time_purchase"
-                        ? "One-time"
-                        : "Subscription"}
-                    </p>
+                    <p className="tag">{orderTypeLabel(product.orderType)}</p>
                     <h2>{product.title}</h2>
                     <p>{product.description}</p>
                   </div>
                   <div className="product-foot">
-                    <strong>
-                      {dollars(product.amountCents)}
-                      {product.frequency ? ` / ${product.frequency}` : ""}
-                    </strong>
+                    <strong>{catalogPriceLabel(product)}</strong>
                     <button
                       type="button"
                       className="primary"
                       onClick={() => startCheckout(product)}
                     >
-                      {product.orderType === "one_time_purchase"
-                        ? "Buy with ACH"
-                        : "Subscribe"}
+                      {catalogCtaLabel(product)}
                     </button>
                   </div>
                 </article>
@@ -530,10 +533,7 @@ export function App() {
                   <h2>Order</h2>
                   <div className="row">
                     <span>{item.title}</span>
-                    <strong>
-                      {dollars(item.amountCents)}
-                      {item.frequency ? ` / ${item.frequency}` : ""}
-                    </strong>
+                    <strong>{catalogPriceLabel(item)}</strong>
                   </div>
                   {totalsLabel ? <p className="fine">{totalsLabel}</p> : null}
                 </div>
@@ -680,7 +680,7 @@ export function App() {
                     />
                     <span>
                       By checking this box, I authorize the debit
-                      {item.orderType === "recurring_subscription" ? "(s)" : ""}{" "}
+                      {item.orderType === "one_time_purchase" ? "" : "(s)"}{" "}
                       described above and agree to {MERCHANT_NAME}&apos;s{" "}
                       <button
                         type="button"
@@ -703,11 +703,7 @@ export function App() {
                     disabled={busy || !consented || !bankToken.trim()}
                     onClick={() => void confirmCheckout()}
                   >
-                    {busy
-                      ? "Processing…"
-                      : item.orderType === "one_time_purchase"
-                        ? "Confirm purchase"
-                        : "Confirm subscription"}
+                    {busy ? "Processing…" : confirmCtaLabel(item)}
                   </button>
                 </div>
               </div>
@@ -734,11 +730,7 @@ export function App() {
         {screen === "receipt" && receipt && (
           <section className="card receipt">
             <p className="eyebrow ok">You&apos;re all set</p>
-            <h1>
-              {receipt.item.orderType === "one_time_purchase"
-                ? "Purchase confirmed"
-                : "Subscription started"}
-            </h1>
+            <h1>{receiptTitle(receipt.item)}</h1>
             <p className="lede">
               A confirmation was sent to <strong>{email}</strong> with the exact
               authorization you agreed to.
@@ -749,13 +741,12 @@ export function App() {
                 <dd>{receipt.item.title}</dd>
               </div>
               <div>
+                <dt>Type</dt>
+                <dd>{orderTypeLabel(receipt.item.orderType)}</dd>
+              </div>
+              <div>
                 <dt>Amount</dt>
-                <dd>
-                  {dollars(receipt.amountCents)}
-                  {receipt.item.frequency
-                    ? ` / ${receipt.item.frequency}`
-                    : ""}
-                </dd>
+                <dd>{catalogPriceLabel(receipt.item)}</dd>
               </div>
               {receipt.paymentId ? (
                 <div>
@@ -840,13 +831,13 @@ export function App() {
               </p>
             </div>
             <div className="card">
-              <h2>Purchases &amp; subscriptions</h2>
+              <h2>Purchases &amp; authorizations</h2>
               <p className="fine">
-                Cancel a subscription anytime in this account. For help, contact{" "}
-                {MERCHANT_SUPPORT}.
+                Cancel an authorization anytime in this account. For help,
+                contact {MERCHANT_SUPPORT}.
               </p>
               {history.length === 0 ? (
-                <p className="empty">No purchases or subscriptions yet.</p>
+                <p className="empty">No purchases or authorizations yet.</p>
               ) : (
                 <ul className="auth-list">
                   {history.map((entry) => (
@@ -854,14 +845,8 @@ export function App() {
                       <div>
                         <strong>{entry.item.title}</strong>
                         <p>
-                          {dollars(entry.amountCents)}
-                          {entry.item.frequency
-                            ? ` / ${entry.item.frequency}`
-                            : ""}{" "}
-                          ·{" "}
-                          {entry.item.orderType === "recurring_subscription"
-                            ? "Subscription"
-                            : "One-time purchase"}
+                          {catalogPriceLabel(entry.item)} ·{" "}
+                          {orderTypeLabel(entry.item.orderType)}
                           {entry.authorization.revoked ? " · canceled" : ""}
                         </p>
                       </div>
@@ -872,9 +857,7 @@ export function App() {
                           disabled={busy}
                           onClick={() => void cancelAuthorization(entry)}
                         >
-                          {entry.item.orderType === "recurring_subscription"
-                            ? "Cancel subscription"
-                            : "Cancel authorization"}
+                          {cancelLabel(entry.item)}
                         </button>
                       ) : (
                         <span className="pill">Canceled</span>

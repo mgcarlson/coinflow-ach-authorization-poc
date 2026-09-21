@@ -1,6 +1,11 @@
 export type Cents = { cents: number; currency?: string };
 
-export type OrderType = "one_time_purchase" | "recurring_subscription";
+export type OrderType =
+  | "one_time_purchase"
+  | "recurring_subscription"
+  | "recurring_balance_top_up"
+  | "limit_order"
+  | "fair_market_value";
 
 export type SubscriptionFrequency = "daily" | "weekly" | "monthly" | "yearly";
 
@@ -15,6 +20,22 @@ export type StructuredTerms =
   | {
       frequency: SubscriptionFrequency;
       subscriptionAmount: Cents;
+    }
+  | {
+      topUpTriggerAmount: Cents;
+      topUpMaxAmount: Cents;
+    }
+  | {
+      bidPrice: Cents;
+      minQuantity: number;
+      maxQuantity: number;
+      maximumTotal: Cents;
+    }
+  | {
+      minQuantity: number;
+      minFairValue?: Cents;
+      maxFairValue: Cents;
+      maximumTotal: Cents;
     };
 
 export type CreateAchAuthorizationBody = {
